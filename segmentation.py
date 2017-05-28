@@ -20,33 +20,30 @@ def show_segment(img, x, y, r, x2=None, y2=None, r2=None):
 def integrate(img, x0, y0, r, arc_start=0, arc_end=1, n=8):
     theta = 2 * math.pi / n
     integral = 0
-    for step in range(round(arc_start * n), round(arc_end * n)):
-        x = x0 + r * math.cos(step * theta)
-        y = y0 + r * math.sin(step * theta)
-        integral += img[round(x), round(y)]
+    for step in np.arange(arc_start * n, arc_end * n, arc_end - arc_start):
+        x = int(x0 + r * math.cos(step * theta))
+        y = int(y0 + r * math.sin(step * theta))
+        integral += img[x, y]
     return integral / n
 
 
-def find_segment(img, x0, y0, minr=0, maxr=500, step=1, sigma=5., center_margin=30, segment_type='pupil'):
+def find_segment(img, x0, y0, minr=0, maxr=500, step=1, sigma=5., center_margin=30, segment_type='iris', jump=1):
     max_o = 0
     max_l = []
-    max_x = max_y = r = 0
 
-    bound = min(img.shape[0] - y0, img.shape[1] - x0, x0, y0)
-    if maxr > bound:
-        maxr = bound
-
-    margin_img = np.pad(img[:, :, 0], maxr, 'mean')
+    if img.ndim > 2:
+        img = img[:, :, 0]
+    margin_img = np.pad(img, maxr, 'edge')
     x0 += maxr
     y0 += maxr
-    for x in range(x0 - center_margin, x0 + center_margin + 1):
-        for y in range(y0 - center_margin, y0 + center_margin + 1):
+    for x in range(x0 - center_margin, x0 + center_margin + 1, jump):
+        for y in range(y0 - center_margin, y0 + center_margin + 1, jump):
             if segment_type == 'pupil':
                 l = np.array([integrate(margin_img, y, x, r) for r in range(minr, maxr, step)])
             else:
-                l = np.array([integrate(margin_img, y, x, r, -1 / 8, 1 / 8, n=16) +
-                              integrate(margin_img, y, x, r, 3 / 8, 5 / 8, n=16)
-                              for r in range(minr, maxr, step)])
+                l = np.array([integrate(margin_img, y, x, r, 1 / 8, 3 / 8, n=8) +
+                              integrate(margin_img, y, x, r, 5 / 8, 7 / 8, n=8)
+                              for r in range(minr + abs(x0 - x) + abs(y0 - y), maxr, step)])
             l = (l[2:] - l[:-2]) / 2
             l = gaussian_filter(l, sigma)
             l = np.abs(l)
@@ -55,7 +52,7 @@ def find_segment(img, x0, y0, minr=0, maxr=500, step=1, sigma=5., center_margin=
                 max_o = max_c
                 max_l = l
                 max_x, max_y = x, y
-                r = np.argmax(l) * step + minr
+                r = np.argmax(l) * step + minr + abs(x0 - x) + abs(y0 - y)
 
     return max_x - maxr, max_y - maxr, r, max_l
 
@@ -79,25 +76,33 @@ def find_pupil_center(img):
     return x / c, y / c
 
 
+def preprocess(image):
+    img = image[:, :, 0].copy()
+    img[img > 225] = 30
+    return cv2.medianBlur(img, 21)
+
+
+def find_pupil_hough(img):
+    circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 20,
+                               param1=50, param2=30, minRadius=10, maxRadius=200)
+    circles = np.uint16(np.around(circles))
+    return circles[0, 0][0], circles[0, 0][1], circles[0, 0][2]
+
+
+def find_iris_id(img, x, y, r):
+    x, y, r, l = find_segment(img, x, y, minr=max(int(1.25 * r), 100),
+                              sigma=5, center_margin=30, jump=5)
+    x, y, r, l = find_segment(img, x, y, minr=r - 10, maxr=r + 10,
+                              sigma=2, center_margin=5, jump=1)
+    return x, y, r
+
+
 # Example usage
 if __name__ == '__main__':
     data = load_utiris()['data']
-    image = cv2.imread(data[2])
-    y, x = find_pupil_center(image)
-    plt.imshow(image)
-    plt.scatter([x], [y])
-    plt.show()
-    x, y = round(x), round(y)
-    print(x, y)
+    image = cv2.imread(data[0])
 
-    # image[image > 230] = 20
-    img = cv2.medianBlur(image, 17)
-    x, y, r, l = find_segment(img, x, y, minr=40, maxr=150, center_margin=30, sigma=1, segment_type='pupil')
-    plt.plot(range(len(l)), l)
-    plt.show()
-    print(x, y, r)
-    img = cv2.medianBlur(image, 129)
-    x2, y2, r2, l2 = find_segment(img, x, y, minr=int(1.25 * r), maxr=10 * r, center_margin=50, segment_type='iris')
-    plt.plot(range(len(l2)), l2)
-    plt.show()
-    show_segment(image, x, y, r, x2, y2, r2)
+    img = preprocess(image)
+    x, y, r = find_pupil_hough(img)
+    x_iris, y_iris, r_iris = find_iris_id(img, x, y, r)
+    show_segment(image, x, y, r, x_iris, y_iris, r_iris)

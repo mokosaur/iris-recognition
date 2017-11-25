@@ -8,9 +8,8 @@ def load_utiris():
     Retrieves image paths and labels for each NIR image in the dataset. There should already exist a directory named
     'UTIRIS V.1'. If it does not exist then download the dataset from the official page (https://utiris.wordpress.com/).
 
-    Returns:
-        A dictionary with two keys: 'data' contains all images paths, 'target' contains the image labels - each eye gets
-         its unique number.
+    :return: A dictionary with two keys: 'data' contains all images paths, 'target' contains the image labels - each eye
+        gets its unique number.
     """
     data = []
     target = []

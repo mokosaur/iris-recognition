@@ -4,11 +4,35 @@ from coding import *
 import os
 
 
-def compare_codes(a, b, mask_a, mask_b):
+def compare_codes(a, b, mask_a, mask_b, rotation=False):
+    """Compares two codes and calculates Jaccard index.
+
+    :param a: Code of the first iris
+    :param b: Code of the second iris
+    :param mask_a: Mask of the first iris
+    :param mask_b: Mask of the second iris
+    :param rotation: Maximum cyclic rotation of the code. If this argument is greater than zero, the function will
+        return minimal distance of all code rotations. If this argument is False, no rotations are calculated.
+
+    :return: Distance between two codes.
+    """
+    if rotation:
+        d = []
+        for i in range(-rotation, rotation + 1):
+            c = np.roll(b, i, axis=1)
+            mask_c = np.roll(mask_b, i, axis=1)
+            d.append(np.sum(np.remainder(a + c, 2) * mask_a * mask_c) / np.sum(mask_a * mask_c))
+        return np.min(d)
     return np.sum(np.remainder(a + b, 2) * mask_a * mask_b) / np.sum(mask_a * mask_b)
 
 
 def encode_photo(image):
+    """Finds the pupil and iris of the eye, and then encodes the unravelled iris.
+
+    :param image: Image of an eye
+    :return: Encoded iris (code, mask)
+    :rtype: tuple (ndarray, ndarray)
+    """
     img = preprocess(image)
     x, y, r = find_pupil_hough(img)
     x_iris, y_iris, r_iris = find_iris_id(img, x, y, r)
@@ -17,6 +41,12 @@ def encode_photo(image):
 
 
 def save_codes(data):
+    """Takes data, and saves encoded images to 'codes' directory.
+
+    :param data: Data formatted as returned by load_* functions from datasets.py module (dictionary with keys 'data' and
+        'target')
+    :type data: dict
+    """
     for i in range(len(data['data'])):
         print("{}/{}".format(i, len(data['data'])))
         image = cv2.imread(data['data'][i])
@@ -32,6 +62,11 @@ def save_codes(data):
 
 
 def load_codes():
+    """Loads codes saved by save_codes function.
+
+    :return: Codes, masks, and targets of saved images
+    :rtype: tuple (ndarray, ndarray, ndarray)
+    """
     codes = []
     masks = []
     targets = []
@@ -47,6 +82,17 @@ def load_codes():
 
 
 def split_codes(codes, masks, targets):
+    """Splits data for testing purposes.
+
+    The first piece of data (code, mask, target) for each target is separated from the rest.
+
+    :param codes: Array of codes
+    :param masks: Array of masks
+    :param targets: Array of targets
+    :return: All codes, masks, and targets without the first instance of each target, then codes, masks, and targets of
+        containing test examples
+    :rtype: 6-tuple of ndarrays
+    """
     X_test = []
     X_base = []
     M_test = []

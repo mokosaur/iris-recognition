@@ -5,12 +5,35 @@ from skimage.util import view_as_blocks
 
 
 def polar2cart(r, x0, y0, theta):
+    """Changes polar coordinates to cartesian coordinate system.
+
+    :param r: Radius
+    :param x0: x coordinate of the origin
+    :param y0: y coordinate of the origin
+    :param theta: Angle
+    :return: Cartesian coordinates
+    :rtype: tuple (int, int)
+    """
     x = int(x0 + r * math.cos(theta))
     y = int(y0 + r * math.sin(theta))
     return x, y
 
 
 def unravel_iris(img, xp, yp, rp, xi, yi, ri, phase_width=300, iris_width=150):
+    """Unravels the iris from the image and transforms it to a straightened representation.
+
+    :param img: Image of an eye
+    :param xp: x coordinate of the pupil centre
+    :param yp: y coordinate of the pupil centre
+    :param rp: Radius of the pupil
+    :param xi: x coordinate of the iris centre
+    :param yi: y coordinate of the iris centre
+    :param ri: Radius of the iris
+    :param phase_width: Length of the transformed iris
+    :param iris_width: Width of the transformed iris
+    :return: Straightened image of the iris
+    :rtype: ndarray
+    """
     if img.ndim > 2:
         img = img[:, :, 0].copy()
     iris = np.zeros((iris_width, phase_width))
@@ -28,11 +51,31 @@ def unravel_iris(img, xp, yp, rp, xi, yi, ri, phase_width=300, iris_width=150):
 
 
 def gabor(rho, phi, w, theta0, r0, alpha, beta):
+    """Calculates gabor wavelet.
+
+    :param rho: Radius of the input coordinates
+    :param phi: Angle of the input coordinates
+    :param w: Gabor wavelet parameter (see the formula)
+    :param theta0: Gabor wavelet parameter (see the formula)
+    :param r0: Gabor wavelet parameter (see the formula)
+    :param alpha: Gabor wavelet parameter (see the formula)
+    :param beta: Gabor wavelet parameter (see the formula)
+    :return: Gabor wavelet value at (rho, phi)
+    """
     return np.exp(-w * 1j * (theta0 - phi)) * np.exp(-(rho - r0) ** 2 / alpha ** 2) * \
            np.exp(-(phi - theta0) ** 2 / beta ** 2)
 
 
 def gabor_convolve(img, w, alpha, beta):
+    """Uses gabor wavelets to extract iris features.
+
+    :param img: Image of an iris
+    :param w: w parameter of Gabor wavelets
+    :param alpha: alpha parameter of Gabor wavelets
+    :param beta: beta parameter of Gabor wavelets
+    :return: Transformed image of the iris (real and imaginary)
+    :rtype: tuple (ndarray, ndarray)
+    """
     rho = np.array([np.linspace(0, 1, img.shape[0]) for i in range(img.shape[1])]).T
     x = np.linspace(0, 1, img.shape[0])
     y = np.linspace(-np.pi, np.pi, img.shape[1])
@@ -42,6 +85,15 @@ def gabor_convolve(img, w, alpha, beta):
 
 
 def iris_encode(img, dr=15, dtheta=15, alpha=0.4):
+    """Encodes the straightened representation of an iris with gabor wavelets.
+
+    :param img: Image of an iris
+    :param dr: Width of image patches producing one feature
+    :param dtheta: Length of image patches producing one feature
+    :param alpha: Gabor wavelets modifier (beta parameter of Gabor wavelets becomes inverse of this number)
+    :return: Iris code and its mask
+    :rtype: tuple (ndarray, ndarray)
+    """
     # mean = np.mean(img)
     # std = img.std()
     mask = view_as_blocks(np.logical_and(100 < img, img < 230), (dr, dtheta))
